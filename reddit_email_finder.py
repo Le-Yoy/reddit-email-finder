@@ -75,13 +75,8 @@ class MicrosoftEmailCheckerV42:
         # OAuth URL for Microsoft (keeping Xbox scope initially)
 # Find line ~70 and replace with this EXACT format:
 
-        self.OAUTH_URL = (
-    "https://login.live.com/oauth20_authorize.srf?"
-    "client_id=00000000402B5328&"
-    "redirect_uri=https://login.live.com/oauth20_desktop.srf&"
-    "scope=https://graph.microsoft.com/Mail.Read&"
-    "display=touch&response_type=token&locale=en"
-)        
+        self.OAUTH_URL = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402B5328&redirect_uri=https://login.live.com/oauth20_desktop.srf&scope=https://graph.microsoft.com/Mail.Read&display=touch&response_type=token&locale=en"
+
         # Microsoft domains
         self.MICROSOFT_DOMAINS = {
             'hotmail.com', 'outlook.com', 'live.com', 'msn.com',
