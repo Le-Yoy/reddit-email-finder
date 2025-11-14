@@ -503,20 +503,20 @@ class MicrosoftEmailCheckerV4:
                 response = session.get(self.OAUTH_URL, timeout=15)
                 text = response.text
                 
-                # Extract sFTTag - EXACT PATTERN from working tool
-                # Uses re.match with re.S flag to find first value="" attribute
-                match = re.match(r'.*value="(.+?)".*', text, re.S)
-                if match is not None:
-                    sftag = match.group(1)
+               # Extract sFTTag from JSON format (Nov 2025 page structure)
+                # Pattern for escaped JSON: "sFTTag":"<input...value=\"...\""
+                sftag_match = re.search(r'"sFTTag":"<input[^>]*value=\\\\"([^"\\\\]+)\\\\"', text)
+                if sftag_match:
+                    sftag = sftag_match.group(1)
                 else:
                     self.log(f"Failed to extract PPFT for {email}", "error")
                     return "ERROR"
                 
-                # Extract urlPost - EXACT PATTERN from working tool
-                # Uses re.match with re.S flag to find urlPost:'...'
-                match = re.match(r".*urlPost:'(.+?)'.*", text, re.S)
-                if match is not None:
-                    url_post = match.group(1)
+                # Extract urlPost from JSON format
+                # Pattern for JSON: "urlPost":"..."
+                urlpost_match = re.search(r'"urlPost":"([^"]+)"', text)
+                if urlpost_match:
+                    url_post = urlpost_match.group(1)
                 else:
                     # Fallback to default
                     url_post = "https://login.live.com/ppsecure/post.srf"
