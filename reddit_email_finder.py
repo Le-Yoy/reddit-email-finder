@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Microsoft Email Checker v4.0 - OAuth Web Authentication Edition
-Uses browser-based OAuth flow instead of blocked IMAP
-Includes proxy support and 2FA detection
+Microsoft Email Checker v4.0.1 - OAuth Web Authentication
+Complete working version with perfect indentation
+No IMAP - Uses OAuth browser authentication
 """
 
 import requests
@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class MicrosoftEmailCheckerV4:
     def __init__(self, root):
         self.root = root
-        self.root.title("Microsoft Email Checker v4.0 - OAuth Edition")
+        self.root.title("Microsoft Email Checker v4.0.1 - OAuth Edition")
         self.root.geometry("1300x750")
         self.root.configure(bg='#1a1a1a')
         
@@ -64,7 +64,9 @@ class MicrosoftEmailCheckerV4:
             'hotmail.co.uk', 'hotmail.fr', 'live.co.uk', 'live.fr',
             'outlook.fr', 'outlook.es', 'outlook.de', 'hotmail.de',
             'live.de', 'hotmail.it', 'live.it', 'passport.com',
-            'windowslive.com', 'hotmail.es', 'live.com.mx', 'hotmail.com.mx'
+            'windowslive.com', 'hotmail.es', 'live.com.mx', 'hotmail.com.mx',
+            'hotmail.com.br', 'live.com.br', 'outlook.com.br',
+            'hotmail.com.ar', 'live.com.ar', 'outlook.com.ar'
         }
         
         # Build UI
@@ -83,13 +85,13 @@ class MicrosoftEmailCheckerV4:
         header_frame.pack(fill=tk.X, pady=(0, 10))
         
         title_label = tk.Label(header_frame, 
-                              text="Microsoft Email Checker v4.0", 
+                              text="Microsoft Email Checker v4.0.1", 
                               font=("Segoe UI", 20, "bold"),
                               fg='#00bcf2', bg='#1a1a1a')
         title_label.pack(side=tk.LEFT)
         
         subtitle = tk.Label(header_frame,
-                           text="OAuth Web Authentication - No IMAP Required",
+                           text="OAuth Web Authentication - No IMAP",
                            font=("Segoe UI", 10),
                            fg='#90ff90', bg='#1a1a1a')
         subtitle.pack(side=tk.LEFT, padx=(20, 0))
@@ -481,8 +483,8 @@ class MicrosoftEmailCheckerV4:
                 speed = (self.checked / elapsed) * 60
                 self.speed_label.config(text=f"{speed:.0f}/min")
     
-def oauth_authenticate(self, email, password):
-        """OAuth web authentication - FIXED token extraction"""
+    def oauth_authenticate(self, email, password):
+        """OAuth web authentication with fixed token extraction"""
         session = requests.Session()
         session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -500,7 +502,7 @@ def oauth_authenticate(self, email, password):
                 # Step 1: GET OAuth page to extract tokens
                 response = session.get(self.OAUTH_URL, timeout=15)
                 
-                # Extract sFTTag (PPFT token) - MULTIPLE PATTERNS
+                # Extract sFTTag (PPFT token) - Multiple patterns
                 sftag = None
                 
                 # Pattern 1: Input field with PPFT
@@ -522,7 +524,7 @@ def oauth_authenticate(self, email, password):
                     self.log(f"Failed to extract PPFT token for {email}", "error")
                     return "ERROR"
                 
-                # Extract urlPost - MULTIPLE PATTERNS
+                # Extract urlPost - Multiple patterns
                 url_post = None
                 
                 # Pattern 1: JavaScript urlPost variable
@@ -542,7 +544,7 @@ def oauth_authenticate(self, email, password):
                 if not url_post.startswith('http'):
                     url_post = 'https://login.live.com' + url_post
                 
-                # Step 2: POST credentials
+                # Step 2: POST credentials with complete data
                 data = {
                     'login': email,
                     'loginfmt': email,
@@ -655,7 +657,7 @@ def oauth_authenticate(self, email, password):
         return "FAILED"
     
     def worker(self, combo):
-        """Worker thread"""
+        """Worker thread for checking accounts"""
         if not self.running:
             return
             
@@ -744,7 +746,7 @@ def oauth_authenticate(self, email, password):
         thread.start()
     
     def toggle_pause(self):
-        """Toggle pause"""
+        """Toggle pause state"""
         if not self.running:
             return
             
@@ -758,7 +760,7 @@ def oauth_authenticate(self, email, password):
             self.status_bar.config(text="Status: Running")
     
     def stop_checking(self):
-        """Stop checking"""
+        """Stop checking process"""
         self.running = False
         self.paused = False
         
@@ -836,6 +838,7 @@ def oauth_authenticate(self, email, password):
             self.log("Copied 2FA valid accounts", "success")
 
 def main():
+    """Main entry point"""
     # Check for required library
     try:
         import requests
