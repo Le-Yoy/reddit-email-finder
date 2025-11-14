@@ -80,7 +80,7 @@ class MicrosoftEmailCheckerV4:
         self.setup_ui()
         self.setup_shortcuts()
         
-def setup_ui(self):
+    def setup_ui(self):
         """Create professional UI with Reddit detection"""
         
         # Main container
@@ -913,4 +913,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
