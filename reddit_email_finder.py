@@ -481,9 +481,9 @@ class MicrosoftEmailCheckerV4:
                 speed = (self.checked / elapsed) * 60
                 self.speed_label.config(text=f"{speed:.0f}/min")
     
-    def oauth_authenticate(self, email, password):
-    """OAuth web authentication - FIXED token extraction"""
-    session = requests.Session()
+def oauth_authenticate(self, email, password):
+        """OAuth web authentication - FIXED token extraction"""
+        session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
