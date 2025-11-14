@@ -503,28 +503,83 @@ class MicrosoftEmailCheckerV4:
                 response = session.get(self.OAUTH_URL, timeout=15)
                 text = response.text
                 
-               # Extract sFTTag from JSON format (Nov 2025 page structure)
-                # Pattern for escaped JSON: "sFTTag":"<input...value=\"...\""
-                sftag_match = re.search(r'"sFTTag":"<input[^>]*value=\\\\"([^"\\\\]+)\\\\"', text)
-                if sftag_match:
-                    sftag = sftag_match.group(1)
-                else:
-                    self.log(f"Failed to extract PPFT for {email}", "error")
+# DEBUG: Print page content to find exact pattern
+                if self.checked == 0:  # Only print for first account
+                    self.log("=== PAGE SOURCE DEBUG ===", "warning")
+                    self.log(f"First 500 chars: {text[:500]}", "info")
+                    
+                    # Find PPFT in text
+                    ppft_pos = text.find('PPFT')
+                    if ppft_pos != -1:
+                        self.log(f"Found PPFT at position {ppft_pos}", "info")
+                        self.log(f"Context: {text[ppft_pos:ppft_pos+200]}", "info")
+                    
+                    # Find urlPost in text
+                    url_pos = text.find('urlPost')
+                    if url_pos != -1:
+                        self.log(f"Found urlPost at position {url_pos}", "info")
+                        self.log(f"Context: {text[url_pos:url_pos+150]}", "info")
+                
+                # Try multiple PPFT extraction patterns
+                sftag = None
+                
+                # Pattern 1: Direct HTML input
+                match = re.search(r'name="PPFT"[^>]*value="([^"]+)"', text)
+                if match:
+                    sftag = match.group(1)
+                    self.log(f"PPFT Pattern 1 matched", "info")
+                
+                # Pattern 2: Escaped JSON format
+                if not sftag:
+                    match = re.search(r'name=\\"PPFT\\"[^>]*value=\\"([^"\\]+)', text)
+                    if match:
+                        sftag = match.group(1)
+                        self.log(f"PPFT Pattern 2 matched", "info")
+                
+                # Pattern 3: sFTTag JSON field
+                if not sftag:
+                    match = re.search(r'"sFTTag":"[^"]*value=\\\\"([^"\\]+)', text)
+                    if match:
+                        sftag = match.group(1)
+                        self.log(f"PPFT Pattern 3 matched", "info")
+                
+                # Pattern 4: Any value attribute near PPFT
+                if not sftag:
+                    match = re.search(r'PPFT[^>]{0,100}value[=:"\\]+([A-Za-z0-9\-_!*$]+)', text)
+                    if match:
+                        sftag = match.group(1)
+                        self.log(f"PPFT Pattern 4 matched", "info")
+                
+                if not sftag:
+                    self.log(f"Failed to extract PPFT for {email} - all patterns failed", "error")
                     return "ERROR"
                 
-                # Extract urlPost from JSON format
-                # Pattern for JSON: "urlPost":"..."
-                urlpost_match = re.search(r'"urlPost":"([^"]+)"', text)
-                if urlpost_match:
-                    url_post = urlpost_match.group(1)
-                else:
-                    # Fallback to default
+                # Try multiple urlPost extraction patterns
+                url_post = None
+                
+                # Pattern 1: JSON format
+                match = re.search(r'"urlPost":"([^"]+)"', text)
+                if match:
+                    url_post = match.group(1)
+                    self.log(f"urlPost Pattern 1 matched", "info")
+                
+                # Pattern 2: JavaScript variable
+                if not url_post:
+                    match = re.search(r'urlPost[\'"]?\s*:\s*[\'"]([^"\'\s]+)', text)
+                    if match:
+                        url_post = match.group(1)
+                        self.log(f"urlPost Pattern 2 matched", "info")
+                
+                # Pattern 3: Default fallback
+                if not url_post:
                     url_post = "https://login.live.com/ppsecure/post.srf"
-                    self.log(f"Using default POST URL for {email}", "warning")
+                    self.log(f"Using default POST URL", "warning")
                 
                 # Ensure URL is complete
                 if not url_post.startswith('http'):
                     url_post = 'https://login.live.com' + url_post
+                
+                self.log(f"Extracted PPFT length: {len(sftag)}, POST URL: {url_post}", "info")
                 
                 # Step 2: POST credentials
                 data = {
