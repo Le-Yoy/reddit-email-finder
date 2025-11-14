@@ -182,7 +182,7 @@ class MicrosoftEmailCheckerV4:
                                     fg='#888888', bg='#2d2d2d')
         self.proxy_status.pack(side=tk.RIGHT, padx=10)
 
-    # Statistics cards
+        # Statistics cards
         stats_frame = tk.Frame(main_container, bg='#1a1a1a')
         stats_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -255,7 +255,7 @@ class MicrosoftEmailCheckerV4:
                                    fg='#888888', bg='#1a1a1a')
         self.speed_label.pack(side=tk.LEFT, padx=(10, 0))
     
-    # SPLIT PANEL
+        # SPLIT PANEL
         split_container = tk.Frame(main_container, bg='#1a1a1a')
         split_container.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
@@ -828,8 +828,7 @@ class MicrosoftEmailCheckerV4:
         
         self.status_bar.config(text=f"Complete | Reddit: {self.reddit_count} | No Reddit: {self.no_reddit_count} | 2FA: {self.twofa_count}")
 
-
-def export_all(self):
+    def export_all(self):
         """Export results to separate files including Reddit detection"""
         if not any([self.full_access, self.twofa_valid, self.failed, self.reddit_found, self.no_reddit]):
             messagebox.showinfo("No Results", "No results to export")
